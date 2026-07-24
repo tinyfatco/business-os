@@ -1,25 +1,22 @@
 {
-	"name": "rocket.chat",
+	"name": "@tinyfat/business-os",
 	"version": "8.6.1",
 	"private": true,
-	"description": "Rocket.Chat Monorepo",
-	"homepage": "https://github.com/RocketChat/Rocket.Chat#readme",
+	"description": "TinyFat customer relationship operating system",
+	"homepage": "https://github.com/tinyfatco/business-os#readme",
 	"bugs": {
-		"url": "https://github.com/RocketChat/Rocket.Chat/issues"
+		"url": "https://github.com/tinyfatco/business-os/issues"
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/RocketChat/Rocket.Chat.git"
+		"url": "git+https://github.com/tinyfatco/business-os.git"
 	},
 	"license": "MIT",
 	"author": "",
 	"main": "index.js",
 	"workspaces": [
 		"apps/*",
-		"packages/*",
-		"ee/apps/*",
-		"ee/packages/*",
-		"apps/meteor/ee/server/services"
+		"packages/*"
 	],
 	"scripts": {
 		"build": "turbo run build",
@@ -28,6 +25,7 @@
 		"dsv": "turbo run dsv --env-mode=loose --filter=@rocket.chat/meteor...",
 		"ms": "turbo run ms --env-mode=loose",
 		"fossify": "TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\"}' ts-node scripts/fossify.ts",
+		"check:foss": "node scripts/check-foss-tree.mjs",
 		"fuselage": "./fuselage.sh",
 		"lint": "turbo run lint",
 		"storybook": "yarn workspace @rocket.chat/meteor run storybook",

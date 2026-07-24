@@ -66,7 +66,7 @@ export const createGeneralSettings = async () => {
 				public: true,
 			},
 		);
-		await this.add('Site_Name', 'Rocket.Chat', {
+		await this.add('Site_Name', 'TinyFat Business OS', {
 			type: 'string',
 			public: true,
 			wizard: {

@@ -70,7 +70,7 @@ Meteor.startup(() => {
 		);
 	});
 
-	settings.watch<string>('Site_Name', (value = 'Rocket.Chat') => {
+	settings.watch<string>('Site_Name', (value = 'TinyFat Business OS') => {
 		const escapedValue = escapeHTML(value);
 		injectIntoHead(
 			'Site_Name',
