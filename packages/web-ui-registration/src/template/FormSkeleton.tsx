@@ -1,0 +1,32 @@
+import { Field, FieldLabel, FieldRow, FieldHint, FieldDescription, Skeleton, InputBoxSkeleton } from '@rocket.chat/fuselage';
+import { Form } from '@rocket.chat/layout';
+
+const FormSkeleton = () => (
+	<Form aria-busy>
+		<Form.Header>
+			<Form.Title>
+				<Skeleton />
+			</Form.Title>
+		</Form.Header>
+		<Form.Container></Form.Container>
+		<Field>
+			<FieldLabel>
+				<Skeleton />
+			</FieldLabel>
+			<FieldDescription>
+				<Skeleton />
+			</FieldDescription>
+			<FieldRow>
+				<InputBoxSkeleton />
+			</FieldRow>
+			<FieldHint>
+				<Skeleton />
+			</FieldHint>
+		</Field>
+		<Form.Footer>
+			<Skeleton />
+		</Form.Footer>
+	</Form>
+);
+
+export default FormSkeleton;
