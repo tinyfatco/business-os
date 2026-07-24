@@ -1,6 +1,6 @@
 import type { LicenseBehavior, LicenseLimitKind } from '@rocket.chat/core-typings';
-import { validateWarnLimit } from '@tinyfat/community-policy/validation';
 import { useLicense } from '@rocket.chat/ui-client';
+import { validateWarnLimit } from '@tinyfat/community-policy';
 
 type LicenseLimitsByBehavior = Record<LicenseBehavior, LicenseLimitKind[]>;
 

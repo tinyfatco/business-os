@@ -5,25 +5,25 @@
 Rocket.Chat already contains most of the operator shell that made the original
 idea sound much larger than it needs to be:
 
-| Upstream Rocket.Chat | TinyFat addition |
-| --- | --- |
-| Users, roles, permissions, private rooms, threads, message history, search, files, and realtime delivery | One opaque customer channel per bounded relationship |
-| Omnichannel navigation, contacts, agent/manager roles, queues, departments, analytics, reports, and real-time monitoring | The append-only encrypted awareness stream as the canonical relationship |
-| Livechat and an app/webhook extension surface for external channels | Host-owned Gmail and Sendly identity, routing, signature verification, delivery, and receipts |
-| Room membership and human collaboration | Expiring relationship-scoped Batman/Manny grants with no global customer listing |
-| A strong existing operations UI | Isolated Troublemaker context and explicit agent-authored sends |
+| Upstream Rocket.Chat                                                                                                     | TinyFat addition                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Users, roles, permissions, private rooms, threads, message history, search, files, and realtime delivery                 | One opaque customer channel per bounded relationship                                          |
+| Omnichannel navigation, contacts, agent/manager roles, queues, departments, analytics, reports, and real-time monitoring | The append-only encrypted awareness stream as the canonical relationship                      |
+| Livechat and an app/webhook extension surface for external channels                                                      | Host-owned Gmail and Sendly identity, routing, signature verification, delivery, and receipts |
+| Room membership and human collaboration                                                                                  | Expiring relationship-scoped Batman/Manny grants with no global customer listing              |
+| A strong existing operations UI                                                                                          | Isolated Troublemaker context and explicit agent-authored sends                               |
 
 The `/omnichannel/realtime-monitoring` page is upstream Rocket.Chat code. The
 FOSS import contains its route and React page at
 `apps/meteor/client/views/omnichannel/realTimeMonitoring/`, its permission, and
 the livechat analytics REST implementation. TinyFat did not build the page.
 
-It does not yet monitor TinyFat customer awareness streams. Rocket.Chat's page
-queries its own Livechat/Omnichannel analytics, while the current TinyFat
-projector creates private customer rooms. Reusing the charts means adding an
-awareness-backed analytics adapter or deliberately representing customer
-channels as Omnichannel rooms; it does not mean making Rocket.Chat message
-storage canonical.
+Hostd now deliberately creates native Omnichannel contacts and conversations
+for provider interactions, so Rocket's queue, assignment, contact history, and
+operational monitoring describe those interactions. The page still does not
+query TinyFat awareness directly: awareness remains the durable
+cross-conversation relationship record, while Omnichannel reports conversation
+lifecycle.
 
 Rocket.Chat's current documentation confirms the broader shell:
 
@@ -62,32 +62,44 @@ features must come from TinyFat requirements and independently authored code.
 ## Architecture
 
 ```text
-Gmail / signed Sendly / Slack / Rocket room
-                    │
-                    v
-       host-owned identity and routing
-                    │
-                    v
-      encrypted customer awareness stream
-          │                 │
-          v                 v
- self-managed Rocket   isolated Troublemaker
-  customer room          customer Manny
-          ^                 │
-          │                 v
-   internal work     explicit Gmail/SMS tool
-                    │
-                    v
-          provider receipt returns to stream
+Gmail / signed Sendly
+         │
+         v
+host-owned identity + journal
+     │                 │
+     v                 v
+native Omnichannel   encrypted awareness
+conversation         relationship stream
+     │                 │
+     └──────┬──────────┘
+            v
+ relationship work surface
+ humans + Manny + scoped agents
+            │
+            v
+ explicit provider send + receipt
 ```
 
 The awareness stream owns ordering, idempotency, provenance, visibility, and
-replay. Rocket rooms, Slack threads, Gmail threads, Sendly conversations, and
-agent workspaces are projections or contributors.
+replay. Omnichannel contacts and conversations provide Rocket's native
+contact-center model; relationship work rooms, Slack threads, Gmail threads,
+Sendly conversations, and agent workspaces are projections or contributors.
 
 Hostd owns provider and workspace credentials. A child Troublemaker receives
-only a capability for its one context, one Rocket room, and one contact's
-provider threads. Adapters never invent customer-facing prose.
+only a capability for its one context, one Rocket relationship surface, and
+one contact's provider threads. Adapters never invent customer-facing prose.
+
+Mattermost and Rocket.Chat use one adapter-neutral customer collaboration
+protocol for working output, threads, files, cleanup, replay protection,
+steering, stops, and per-channel execution. Their adapters implement only
+transport primitives and inbound event parsing.
+
+Rocket.Chat is not assumed to be the eventual workspace. This spike is one
+executable reference implementation of that contract. A Zulip implementation
+can be compared on licensing, operational weight, topic/thread fit, extension
+surface, and its ability to satisfy the same parity suite without moving
+identity, awareness, delivery, or collaboration semantics into Zulip-specific
+code.
 
 ## Focused verification
 
@@ -165,7 +177,11 @@ Important commits:
 
 The bridge subscribes once at the host, journals a human room message before
 waking its context, and gives the runtime only bound-room read/append
-capabilities. The runtime never receives the local admin token.
+capabilities. It also maps each provider thread to a native Omnichannel
+conversation through the authenticated
+`tinyfat/omnichannel/conversation` endpoint, preserving the real email or SMS
+source and verified TinyFat identity evidence. The runtime never receives the
+local admin token.
 
 The native Gmail proof used `gog --account alex@tinyfat.com` to send one
 authorized message to `manny@tinyfat.com`. Hostd projected the inbound email,
@@ -175,25 +191,26 @@ Personal Gmail, Rocket.Chat Cloud, and Sendly were not used.
 
 ## Acceptance evidence
 
-| Requirement | Evidence |
-| --- | --- |
-| Awareness is canonical | Encrypted JSONL stream, strict per-customer sequence, hash chain, replay tests |
-| No cross-customer leakage | Identity, collaboration-grant, Rocket proxy, Gmail scope, and Sendly scope tests |
-| External text is agent/human-authored | Gmail tools-only boundary and `sendAgentAuthored`; inbound Sendly test asserts zero outbound |
-| Email native thread | Live Manny Gmail proof with host receipt and Rocket projection |
-| Email and phone can be one relationship | Verified link service plus signed SMS fixture resolves to the email customer channel |
-| Batman can help through Manny | Scoped Slack Batman event is visible to the same channel's Manny; another customer is denied |
-| Delivery is replayable/idempotent | Gmail request ledger, Sendly delivery ledger, Rocket projection ledger, full replay |
-| Runtime restart preserves relationship | Live email proof replaced the Docker runtime version between turns and continued the same context and awareness sequence |
-| Existing routes stay intact | No resident adapter, Sendly webhook, sender row, or Crawdad route changed |
+| Requirement                             | Evidence                                                                                                                 |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Awareness is canonical                  | Encrypted JSONL stream, strict per-customer sequence, hash chain, replay tests                                           |
+| No cross-customer leakage               | Identity, collaboration-grant, Rocket proxy, Gmail scope, and Sendly scope tests                                         |
+| External text is agent/human-authored   | Gmail tools-only boundary and `sendAgentAuthored`; inbound Sendly test asserts zero outbound                             |
+| Email native conversation               | Stored Gmail ingress appears as a visitor-authored message in a native conversation assigned to the relationship Manny   |
+| Email and phone can be one relationship | Verified link service plus signed SMS fixture resolves to the email customer channel                                     |
+| Batman can help through Manny           | Scoped Slack Batman event is visible to the same channel's Manny; another customer is denied                             |
+| Delivery is replayable/idempotent       | Gmail request ledger, Sendly delivery ledger, Rocket projection ledger, full replay                                      |
+| Runtime restart preserves relationship  | Live email proof replaced the Docker runtime version between turns and continued the same context and awareness sequence |
+| Existing routes stay intact             | No resident adapter, Sendly webhook, sender row, or Crawdad route changed                                                |
 
 ## Known gaps before production
 
 - The clean Business OS packages and Troublemaker hostd prototype still use
   separate spike stores. They need one production host service and migration
   strategy.
-- Rocket's upstream real-time monitoring charts do not yet query awareness
-  events.
+- Rocket's real-time monitoring describes native conversation operations, not
+  the full awareness-backed relationship history. A combined relationship view
+  still needs product UI.
 - The Sendly transport has no broad live mode, by design. A controlled
   recipient and separately reviewed route are required for live QA.
 - Batman's live Slack resident has not been given these grants yet.

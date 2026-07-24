@@ -2,15 +2,18 @@
 	"name": "@tinyfat/community-policy",
 	"version": "0.0.1",
 	"private": true,
+	"type": "module",
 	"main": "./dist/index.js",
 	"typings": "./dist/index.d.ts",
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
 		"./validation": {
 			"types": "./dist/validation.d.ts",
+			"import": "./dist/validation.js",
 			"default": "./dist/validation.js"
 		}
 	},

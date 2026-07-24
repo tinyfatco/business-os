@@ -21,11 +21,13 @@ TinyFat Business OS repairs that boundary independently:
 - a test that imported a deleted Enterprise implementation is removed.
 
 This is intentional product scope, not an attempt to reproduce missing paid
-features. TinyFat CRM does not use Rocket.Chat Omnichannel, contact
-verification, contact merge, licensing, media calls, or Enterprise federation
-as its customer system. Those concepts are implemented independently where
-needed through customer awareness, hostd identity, and explicit provider
-delivery.
+features. TinyFat CRM uses the Omnichannel contacts, visitors, conversations,
+routing, and analytics that remain in the MIT tree. TinyFat adds its provider
+adapters, awareness semantics, and verified identity evidence independently.
+It does not restore or reimplement removed Enterprise source. In particular,
+the Enterprise contact-verification app is not used; TinyFat's existing
+challenge and operator-review service supplies verification evidence, which a
+narrow community integration may reflect into the native contact channel.
 
 `scripts/check-foss-tree.mjs` enforces:
 

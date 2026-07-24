@@ -1,5 +1,7 @@
 type Callback = () => void | Promise<void>;
 
+export { validateWarnLimit } from './validation.js';
+
 export type CommunityPolicyTag = {
 	name: string;
 };

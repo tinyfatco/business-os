@@ -14,14 +14,19 @@ TinyFat Business OS is self-managed. Its setup flow does not create or require
 a Rocket.Chat Cloud registration.
 
 ```text
-email / SMS / Slack / workspace
-              │
-              v
-      customer awareness stream
-         │         │          │
-         v         v          v
-  Business OS   Troublemaker  hostd delivery
-  customer room customer mind Gmail / Sendly
+email / SMS
+    │
+    v
+hostd identity + journal
+    │               │
+    v               v
+Omnichannel       awareness stream
+conversation        relationship truth
+    │               │
+    └───────┬───────┘
+            v
+ Business OS relationship work
+ humans + Manny + scoped agents
 ```
 
 ## Spike target
@@ -31,8 +36,8 @@ The first working slice is TinyFat's Websites for People workflow:
 1. A test message arrives through `manny@tinyfat.com`.
 2. Hostd resolves or creates a stable customer channel.
 3. The inbound message is appended to the channel's awareness stream.
-4. A private Business OS room projects the relationship and wakes its isolated
-   Manny context.
+4. A native Omnichannel conversation represents the external interaction, and
+   an internal Business OS work surface wakes its isolated Manny context.
 5. Alex, Batman, Manny, and other explicitly authorized collaborators can work
    together without exposing unrelated customer context.
 6. Manny explicitly sends a native-thread email reply.
@@ -45,6 +50,10 @@ The first working slice is TinyFat's Websites for People workflow:
 - Troublemaker is the agent runtime and intelligence layer.
 - The awareness stream is the canonical definition of the relationship.
 - Business OS rooms are projections, not the identity or transport database.
+- Omnichannel contacts identify customers; Omnichannel conversations model
+  individual external interactions, not the whole relationship.
+- Mattermost and Rocket.Chat share one adapter-neutral customer collaboration
+  protocol; workspace adapters supply only transport primitives.
 - Hostd owns provider credentials, routing, identity proofs, capabilities,
   event ordering, and runtime lifecycle.
 - Agents collaborate through scoped relationship grants; no agent receives an

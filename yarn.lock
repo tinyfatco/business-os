@@ -9913,6 +9913,7 @@ __metadata:
   resolution: "@rocket.chat/omni-core@workspace:packages/omni-core"
   dependencies:
     "@rocket.chat/jest-presets": "workspace:~"
+    "@rocket.chat/logger": "workspace:^"
     "@rocket.chat/models": "workspace:^"
     "@rocket.chat/patch-injection": "workspace:^"
     "@rocket.chat/tools": "workspace:*"
@@ -12644,9 +12645,21 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@tinyfat/relationship-collaboration@workspace:packages/tinyfat-collaboration":
+  version: 0.0.0-use.local
+  resolution: "@tinyfat/relationship-collaboration@workspace:packages/tinyfat-collaboration"
+  languageName: unknown
+  linkType: soft
+
 "@tinyfat/rocket-projection@workspace:packages/tinyfat-rocket-projection":
   version: 0.0.0-use.local
   resolution: "@tinyfat/rocket-projection@workspace:packages/tinyfat-rocket-projection"
+  languageName: unknown
+  linkType: soft
+
+"@tinyfat/sendly-bridge@workspace:packages/tinyfat-sendly":
+  version: 0.0.0-use.local
+  resolution: "@tinyfat/sendly-bridge@workspace:packages/tinyfat-sendly"
   languageName: unknown
   linkType: soft
 
