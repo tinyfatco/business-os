@@ -214,8 +214,9 @@ without changing which record is canonical.
   events, ordering, idempotency, replay, integrity checks, and scoped reads.
 - `@tinyfat/customer-identity` implements encrypted contacts/endpoints,
   customer-channel participation, native provider-thread binding, fail-closed
-  inbound resolution, verified endpoint challenges, merge review, and
-  Rocket.Chat room bindings.
+  inbound resolution, verified endpoint challenges, operator-approved links,
+  bounded verification attempts, non-mutating link suggestions, merge review,
+  awareness-paired audit events, and Rocket.Chat room bindings.
 - `@tinyfat/relationship-collaboration` issues expiring, revocable,
   relationship-scoped human and agent grants; stores only HMAC bearer lookups;
   and enforces scoped awareness reads and provenance-preserving appends.

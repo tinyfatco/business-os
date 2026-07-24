@@ -125,6 +125,8 @@ export class CustomerIdentityStore {
 				expires_at TEXT NOT NULL,
 				verified_at TEXT,
 				initiated_by TEXT NOT NULL,
+				attempts INTEGER NOT NULL DEFAULT 0,
+				max_attempts INTEGER NOT NULL DEFAULT 5,
 				status TEXT NOT NULL CHECK(status IN ('pending', 'verified', 'expired', 'failed', 'merge_required')),
 				created_at TEXT NOT NULL,
 				updated_at TEXT NOT NULL,
@@ -141,6 +143,9 @@ export class CustomerIdentityStore {
 				challenge_id TEXT NOT NULL UNIQUE,
 				status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected', 'completed')),
 				initiated_by TEXT NOT NULL,
+				decided_by TEXT,
+				decision_note TEXT,
+				decided_at TEXT,
 				created_at TEXT NOT NULL,
 				updated_at TEXT NOT NULL,
 				FOREIGN KEY(target_channel_id) REFERENCES customer_channels(id),
@@ -149,6 +154,43 @@ export class CustomerIdentityStore {
 				FOREIGN KEY(claimed_endpoint_id) REFERENCES contact_endpoints(id),
 				FOREIGN KEY(challenge_id) REFERENCES identity_link_challenges(id)
 			);
+
+			CREATE TABLE IF NOT EXISTS identity_link_approvals (
+				id TEXT PRIMARY KEY,
+				source_endpoint_id TEXT NOT NULL,
+				target_channel_id TEXT NOT NULL,
+				claimed_kind TEXT NOT NULL CHECK(claimed_kind IN ('email', 'phone')),
+				claimed_lookup_hmac TEXT NOT NULL,
+				claimed_value_ciphertext TEXT NOT NULL,
+				claimed_endpoint_id TEXT,
+				merge_review_id TEXT,
+				approved_by TEXT NOT NULL,
+				reason_ciphertext TEXT NOT NULL,
+				outcome TEXT NOT NULL CHECK(outcome IN ('linked', 'already_linked', 'merge_required')),
+				created_at TEXT NOT NULL,
+				FOREIGN KEY(source_endpoint_id) REFERENCES contact_endpoints(id),
+				FOREIGN KEY(target_channel_id) REFERENCES customer_channels(id),
+				FOREIGN KEY(claimed_endpoint_id) REFERENCES contact_endpoints(id),
+				FOREIGN KEY(merge_review_id) REFERENCES channel_merge_reviews(id)
+			);
+
+			CREATE TABLE IF NOT EXISTS identity_link_audit (
+				id TEXT PRIMARY KEY,
+				action TEXT NOT NULL,
+				target_channel_id TEXT NOT NULL,
+				source_endpoint_id TEXT,
+				claimed_endpoint_id TEXT,
+				challenge_id TEXT,
+				approval_id TEXT,
+				merge_review_id TEXT,
+				actor_id TEXT NOT NULL,
+				outcome TEXT NOT NULL,
+				detail_ciphertext TEXT,
+				created_at TEXT NOT NULL
+			);
+
+			CREATE INDEX IF NOT EXISTS identity_link_audit_channel
+				ON identity_link_audit(target_channel_id, created_at, id);
 
 			CREATE TABLE IF NOT EXISTS rocket_bindings (
 				customer_channel_id TEXT PRIMARY KEY,
@@ -159,6 +201,11 @@ export class CustomerIdentityStore {
 				FOREIGN KEY(customer_channel_id) REFERENCES customer_channels(id)
 			);
 		`);
+		this.#ensureColumn('identity_link_challenges', 'attempts', 'INTEGER NOT NULL DEFAULT 0');
+		this.#ensureColumn('identity_link_challenges', 'max_attempts', 'INTEGER NOT NULL DEFAULT 5');
+		this.#ensureColumn('channel_merge_reviews', 'decided_by', 'TEXT');
+		this.#ensureColumn('channel_merge_reviews', 'decision_note', 'TEXT');
+		this.#ensureColumn('channel_merge_reviews', 'decided_at', 'TEXT');
 	}
 
 	close() {
@@ -508,6 +555,254 @@ export class CustomerIdentityStore {
 		};
 	}
 
+	suggestEndpointLink({
+		sourceEndpointId,
+		targetChannelId,
+		claimedKind,
+		claimedValue,
+	}) {
+		const sourceEndpoint = this.#verifiedSourceParticipant(sourceEndpointId, targetChannelId);
+		const normalizedClaim = normalizeEndpoint(claimedKind, claimedValue);
+		const claimedLookup = createLookupHmac(this.#lookupKey, `endpoint:${claimedKind}`, normalizedClaim);
+
+		if (claimedKind === sourceEndpoint.kind && claimedLookup === sourceEndpoint.lookup_hmac) {
+			return {
+				disposition: 'already-linked',
+				reason: 'source-endpoint',
+				endpointId: sourceEndpoint.id,
+				label: getSafeEndpointLabel(claimedKind, normalizedClaim),
+			};
+		}
+
+		const existingEndpoint = this.#database.prepare(`
+			SELECT * FROM contact_endpoints WHERE kind = ? AND lookup_hmac = ?
+		`).get(claimedKind, claimedLookup);
+		if (!existingEndpoint) {
+			return {
+				disposition: 'suggested',
+				reason: 'new-endpoint',
+				label: getSafeEndpointLabel(claimedKind, normalizedClaim),
+				requires: 'challenge-or-operator-approval',
+			};
+		}
+		if (!existingEndpoint.contact_id || existingEndpoint.contact_id === sourceEndpoint.contact_id) {
+			return {
+				disposition: existingEndpoint.verification_state === 'verified'
+					? 'already-linked'
+					: 'suggested',
+				reason: existingEndpoint.contact_id ? 'same-contact' : 'unassigned-endpoint',
+				endpointId: existingEndpoint.id,
+				label: getSafeEndpointLabel(claimedKind, normalizedClaim),
+				...(existingEndpoint.verification_state === 'verified'
+					? {}
+					: { requires: 'challenge-or-operator-approval' }),
+			};
+		}
+
+		const conflictingCustomerChannelIds = this.#database.prepare(`
+			SELECT customer_channel_id AS customerChannelId
+			FROM channel_participants
+			WHERE contact_id = ?
+			ORDER BY customer_channel_id
+		`).all(existingEndpoint.contact_id).map(({ customerChannelId }) => customerChannelId);
+		return {
+			disposition: 'review-required',
+			reason: 'existing-contact',
+			endpointId: existingEndpoint.id,
+			label: getSafeEndpointLabel(claimedKind, normalizedClaim),
+			conflictingContactId: existingEndpoint.contact_id,
+			conflictingCustomerChannelIds,
+			requires: 'explicit-merge-review',
+		};
+	}
+
+	approveEndpointLink({
+		id = createId('apr'),
+		sourceEndpointId,
+		targetChannelId,
+		claimedKind,
+		claimedValue,
+		approvedBy,
+		reason,
+	}) {
+		assertOpaqueId(id, 'approval id');
+		assertOpaqueId(approvedBy, 'approvedBy');
+		if (typeof reason !== 'string' || !reason.trim() || reason.length > 500 || reason.includes('\0')) {
+			throw new TypeError('reason must be a non-empty bounded string');
+		}
+		const sourceEndpoint = this.#verifiedSourceParticipant(sourceEndpointId, targetChannelId);
+		const normalizedClaim = normalizeEndpoint(claimedKind, claimedValue);
+		const claimedLookup = createLookupHmac(this.#lookupKey, `endpoint:${claimedKind}`, normalizedClaim);
+		if (claimedKind === sourceEndpoint.kind && claimedLookup === sourceEndpoint.lookup_hmac) {
+			throw new Error('claimed endpoint is already the verified source endpoint');
+		}
+		const existingEndpoint = this.#database.prepare(`
+			SELECT * FROM contact_endpoints WHERE kind = ? AND lookup_hmac = ?
+		`).get(claimedKind, claimedLookup);
+		const timestamp = this.#now();
+		const claimedCiphertext = encryptValue(this.#encryptionKey, `link-approval:${id}:claim`, normalizedClaim);
+
+		if (existingEndpoint?.contact_id && existingEndpoint.contact_id !== sourceEndpoint.contact_id) {
+			const challengeId = createId('lnk');
+			const reviewId = createId('mrg');
+			this.#database.exec('BEGIN IMMEDIATE');
+			try {
+				this.#database.prepare(`
+					INSERT INTO identity_link_challenges(
+						id, source_endpoint_id, target_channel_id, claimed_kind,
+						claimed_lookup_hmac, claimed_value_ciphertext, challenge_hash,
+						expires_at, initiated_by, attempts, max_attempts, status,
+						created_at, updated_at, verified_at
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 'merge_required', ?, ?, ?)
+				`).run(
+					challengeId,
+					sourceEndpointId,
+					targetChannelId,
+					claimedKind,
+					claimedLookup,
+					encryptValue(this.#encryptionKey, `link-challenge:${challengeId}:claim`, normalizedClaim),
+					createLookupHmac(this.#lookupKey, `link-challenge:${challengeId}`, randomUUID()),
+					timestamp,
+					approvedBy,
+					timestamp,
+					timestamp,
+					timestamp,
+				);
+				this.#database.prepare(`
+					INSERT INTO channel_merge_reviews(
+						id, target_channel_id, source_contact_id, conflicting_contact_id,
+						claimed_endpoint_id, challenge_id, status, initiated_by,
+						created_at, updated_at
+					) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+				`).run(
+					reviewId,
+					targetChannelId,
+					sourceEndpoint.contact_id,
+					existingEndpoint.contact_id,
+					existingEndpoint.id,
+					challengeId,
+					approvedBy,
+					timestamp,
+					timestamp,
+				);
+				this.#database.prepare(`
+					INSERT INTO identity_link_approvals(
+						id, source_endpoint_id, target_channel_id, claimed_kind,
+						claimed_lookup_hmac, claimed_value_ciphertext, claimed_endpoint_id,
+						merge_review_id, approved_by, reason_ciphertext, outcome, created_at
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'merge_required', ?)
+				`).run(
+					id,
+					sourceEndpointId,
+					targetChannelId,
+					claimedKind,
+					claimedLookup,
+					claimedCiphertext,
+					existingEndpoint.id,
+					reviewId,
+					approvedBy,
+					encryptValue(this.#encryptionKey, `link-approval:${id}:reason`, reason.trim()),
+					timestamp,
+				);
+				this.#database.exec('COMMIT');
+			} catch (error) {
+				this.#database.exec('ROLLBACK');
+				throw error;
+			}
+			this.#recordLinkAudit({
+				action: 'operator.approved',
+				targetChannelId,
+				sourceEndpointId,
+				claimedEndpointId: existingEndpoint.id,
+				approvalId: id,
+				mergeReviewId: reviewId,
+				actorId: approvedBy,
+				outcome: 'merge-required',
+				detail: reason.trim(),
+			});
+			return {
+				disposition: 'merge-required',
+				approvalId: id,
+				reviewId,
+				targetCustomerChannelId: targetChannelId,
+				claimedEndpointId: existingEndpoint.id,
+			};
+		}
+
+		const endpointId = existingEndpoint?.id ?? createId('end');
+		const outcome = existingEndpoint?.contact_id === sourceEndpoint.contact_id
+			&& existingEndpoint.verification_state === 'verified'
+			? 'already_linked'
+			: 'linked';
+		this.#database.exec('BEGIN IMMEDIATE');
+		try {
+			if (existingEndpoint) {
+				this.#database.prepare(`
+					UPDATE contact_endpoints
+					SET contact_id = ?, verification_state = 'verified',
+						verified_at = COALESCE(verified_at, ?), updated_at = ?
+					WHERE id = ?
+				`).run(sourceEndpoint.contact_id, timestamp, timestamp, endpointId);
+			} else {
+				this.#database.prepare(`
+					INSERT INTO contact_endpoints(
+						id, contact_id, kind, lookup_hmac, value_ciphertext,
+						verification_state, verified_at, source, created_at, updated_at
+					) VALUES (?, ?, ?, ?, ?, 'verified', ?, 'operator-approved', ?, ?)
+				`).run(
+					endpointId,
+					sourceEndpoint.contact_id,
+					claimedKind,
+					claimedLookup,
+					encryptValue(this.#encryptionKey, `endpoint:${endpointId}`, normalizedClaim),
+					timestamp,
+					timestamp,
+					timestamp,
+				);
+			}
+			this.#database.prepare(`
+				INSERT INTO identity_link_approvals(
+					id, source_endpoint_id, target_channel_id, claimed_kind,
+					claimed_lookup_hmac, claimed_value_ciphertext, claimed_endpoint_id,
+					approved_by, reason_ciphertext, outcome, created_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`).run(
+				id,
+				sourceEndpointId,
+				targetChannelId,
+				claimedKind,
+				claimedLookup,
+				claimedCiphertext,
+				endpointId,
+				approvedBy,
+				encryptValue(this.#encryptionKey, `link-approval:${id}:reason`, reason.trim()),
+				outcome,
+				timestamp,
+			);
+			this.#database.exec('COMMIT');
+		} catch (error) {
+			this.#database.exec('ROLLBACK');
+			throw error;
+		}
+		this.#recordLinkAudit({
+			action: 'operator.approved',
+			targetChannelId,
+			sourceEndpointId,
+			claimedEndpointId: endpointId,
+			approvalId: id,
+			actorId: approvedBy,
+			outcome: outcome.replace('_', '-'),
+			detail: reason.trim(),
+		});
+		return {
+			disposition: outcome === 'already_linked' ? 'already-linked' : 'linked',
+			approvalId: id,
+			targetCustomerChannelId: targetChannelId,
+			contactId: sourceEndpoint.contact_id,
+			endpoint: this.getEndpoint(endpointId),
+		};
+	}
+
 	startLinkChallenge({
 		id = createId('lnk'),
 		sourceEndpointId,
@@ -517,6 +812,7 @@ export class CustomerIdentityStore {
 		code,
 		initiatedBy,
 		ttlSeconds = 600,
+		maxAttempts = 5,
 	}) {
 		assertOpaqueId(id, 'challenge id');
 		assertOpaqueId(initiatedBy, 'initiatedBy');
@@ -537,6 +833,9 @@ export class CustomerIdentityStore {
 		if (typeof code !== 'string' || code.length < 4) {
 			throw new TypeError('challenge code must contain at least four characters');
 		}
+		if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
+			throw new TypeError('maxAttempts must be an integer from 1 to 10');
+		}
 
 		const normalizedClaim = normalizeEndpoint(claimedKind, claimedValue);
 		const claimedLookup = createLookupHmac(this.#lookupKey, `endpoint:${claimedKind}`, normalizedClaim);
@@ -553,8 +852,8 @@ export class CustomerIdentityStore {
 			INSERT INTO identity_link_challenges(
 				id, source_endpoint_id, target_channel_id, claimed_kind,
 				claimed_lookup_hmac, claimed_value_ciphertext, challenge_hash,
-				expires_at, initiated_by, status, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+				expires_at, initiated_by, attempts, max_attempts, status, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'pending', ?, ?)
 		`).run(
 			id,
 			sourceEndpointId,
@@ -565,9 +864,18 @@ export class CustomerIdentityStore {
 			challengeHash,
 			expiresAt,
 			initiatedBy,
+			maxAttempts,
 			timestamp,
 			timestamp,
 		);
+		this.#recordLinkAudit({
+			action: 'challenge.started',
+			targetChannelId,
+			sourceEndpointId,
+			challengeId: id,
+			actorId: initiatedBy,
+			outcome: 'pending',
+		});
 
 		return {
 			id,
@@ -580,12 +888,42 @@ export class CustomerIdentityStore {
 		};
 	}
 
-	verifyLinkChallenge({ challengeId, code }) {
+	getLinkChallenge(challengeId) {
+		assertOpaqueId(challengeId, 'challengeId');
+		const row = this.#database.prepare(`
+			SELECT * FROM identity_link_challenges WHERE id = ?
+		`).get(challengeId);
+		if (!row) return undefined;
+		const claimedValue = decryptValue(
+			this.#encryptionKey,
+			`link-challenge:${row.id}:claim`,
+			row.claimed_value_ciphertext,
+		);
+		return {
+			id: row.id,
+			sourceEndpointId: row.source_endpoint_id,
+			targetChannelId: row.target_channel_id,
+			claimedKind: row.claimed_kind,
+			claimedLabel: getSafeEndpointLabel(row.claimed_kind, claimedValue),
+			expiresAt: row.expires_at,
+			verifiedAt: row.verified_at,
+			initiatedBy: row.initiated_by,
+			attempts: Number(row.attempts || 0),
+			maxAttempts: Number(row.max_attempts || 5),
+			status: row.status,
+			createdAt: row.created_at,
+			updatedAt: row.updated_at,
+		};
+	}
+
+	verifyLinkChallenge({ challengeId, code, verifiedBy }) {
 		const challenge = this.#database.prepare('SELECT * FROM identity_link_challenges WHERE id = ?').get(challengeId);
 
 		if (!challenge || challenge.status !== 'pending') {
 			return { disposition: 'failed', reason: 'challenge-not-pending' };
 		}
+		const verificationActor = verifiedBy ?? challenge.initiated_by;
+		assertOpaqueId(verificationActor, 'verifiedBy');
 
 		const timestamp = this.#now();
 
@@ -593,6 +931,14 @@ export class CustomerIdentityStore {
 			this.#database.prepare(`
 				UPDATE identity_link_challenges SET status = 'expired', updated_at = ? WHERE id = ?
 			`).run(timestamp, challengeId);
+			this.#recordLinkAudit({
+				action: 'challenge.verified',
+				targetChannelId: challenge.target_channel_id,
+				sourceEndpointId: challenge.source_endpoint_id,
+				challengeId,
+				actorId: verificationActor,
+				outcome: 'expired',
+			});
 			return { disposition: 'failed', reason: 'challenge-expired' };
 		}
 
@@ -600,6 +946,21 @@ export class CustomerIdentityStore {
 		const actual = Buffer.from(createLookupHmac(this.#lookupKey, `link-challenge:${challengeId}`, code), 'utf8');
 
 		if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+			const attempts = Number(challenge.attempts || 0) + 1;
+			const terminal = attempts >= Number(challenge.max_attempts || 5);
+			this.#database.prepare(`
+				UPDATE identity_link_challenges
+				SET attempts = ?, status = ?, updated_at = ?
+				WHERE id = ?
+			`).run(attempts, terminal ? 'failed' : 'pending', timestamp, challengeId);
+			this.#recordLinkAudit({
+				action: 'challenge.verified',
+				targetChannelId: challenge.target_channel_id,
+				sourceEndpointId: challenge.source_endpoint_id,
+				challengeId,
+				actorId: verificationActor,
+				outcome: terminal ? 'attempt-limit-reached' : 'incorrect-code',
+			});
 			return { disposition: 'failed', reason: 'incorrect-code' };
 		}
 
@@ -639,6 +1000,16 @@ export class CustomerIdentityStore {
 				this.#database.exec('ROLLBACK');
 				throw error;
 			}
+			this.#recordLinkAudit({
+				action: 'challenge.verified',
+				targetChannelId: challenge.target_channel_id,
+				sourceEndpointId: challenge.source_endpoint_id,
+				claimedEndpointId: existingEndpoint.id,
+				challengeId,
+				mergeReviewId: reviewId,
+				actorId: verificationActor,
+				outcome: 'merge-required',
+			});
 
 			return {
 				disposition: 'merge-required',
@@ -691,6 +1062,15 @@ export class CustomerIdentityStore {
 			this.#database.exec('ROLLBACK');
 			throw error;
 		}
+		this.#recordLinkAudit({
+			action: 'challenge.verified',
+			targetChannelId: challenge.target_channel_id,
+			sourceEndpointId: challenge.source_endpoint_id,
+			claimedEndpointId: endpointId,
+			challengeId,
+			actorId: verificationActor,
+			outcome: 'linked',
+		});
 
 		return {
 			disposition: 'linked',
@@ -707,9 +1087,84 @@ export class CustomerIdentityStore {
 				conflicting_contact_id AS conflictingContactId,
 				claimed_endpoint_id AS claimedEndpointId,
 				challenge_id AS challengeId, status, initiated_by AS initiatedBy,
+				decided_by AS decidedBy, decision_note AS decisionNote,
+				decided_at AS decidedAt,
 				created_at AS createdAt, updated_at AS updatedAt
 			FROM channel_merge_reviews ORDER BY created_at, id
 		`).all();
+	}
+
+	resolveMergeReview({ reviewId, decision, decidedBy, note }) {
+		assertOpaqueId(reviewId, 'reviewId');
+		assertOpaqueId(decidedBy, 'decidedBy');
+		if (!['approved', 'rejected'].includes(decision)) {
+			throw new TypeError('decision must be approved or rejected');
+		}
+		if (typeof note !== 'string' || !note.trim() || note.length > 1000 || note.includes('\0')) {
+			throw new TypeError('note must be a non-empty bounded string');
+		}
+		const review = this.#database.prepare(`
+			SELECT * FROM channel_merge_reviews WHERE id = ?
+		`).get(reviewId);
+		if (!review) throw new Error('merge review not found');
+		if (review.status !== 'pending') {
+			return {
+				disposition: review.status,
+				reviewId,
+				noChange: true,
+			};
+		}
+		const timestamp = this.#now();
+		this.#database.prepare(`
+			UPDATE channel_merge_reviews
+			SET status = ?, decided_by = ?, decision_note = ?,
+				decided_at = ?, updated_at = ?
+			WHERE id = ? AND status = 'pending'
+		`).run(decision, decidedBy, note.trim(), timestamp, timestamp, reviewId);
+		this.#recordLinkAudit({
+			action: 'merge-review.decided',
+			targetChannelId: review.target_channel_id,
+			sourceEndpointId: this.#database.prepare(`
+				SELECT source_endpoint_id AS sourceEndpointId
+				FROM identity_link_challenges WHERE id = ?
+			`).get(review.challenge_id)?.sourceEndpointId,
+			claimedEndpointId: review.claimed_endpoint_id,
+			challengeId: review.challenge_id,
+			mergeReviewId: reviewId,
+			actorId: decidedBy,
+			outcome: decision,
+			detail: note.trim(),
+		});
+		return {
+			disposition: decision === 'approved' ? 'approved-pending-merge' : 'rejected',
+			reviewId,
+			targetCustomerChannelId: review.target_channel_id,
+			claimedEndpointId: review.claimed_endpoint_id,
+		};
+	}
+
+	listLinkAudit(customerChannelId) {
+		assertOpaqueId(customerChannelId, 'customerChannelId');
+		return this.#database.prepare(`
+			SELECT id, action, target_channel_id AS targetCustomerChannelId,
+				source_endpoint_id AS sourceEndpointId,
+				claimed_endpoint_id AS claimedEndpointId,
+				challenge_id AS challengeId, approval_id AS approvalId,
+				merge_review_id AS mergeReviewId, actor_id AS actorId,
+				outcome, detail_ciphertext AS detailCiphertext,
+				created_at AS createdAt
+			FROM identity_link_audit
+			WHERE target_channel_id = ?
+			ORDER BY rowid
+		`).all(customerChannelId).map((row) => {
+			const { detailCiphertext, ...audit } = row;
+			return {
+				...audit,
+				detail: detailCiphertext
+					? decryptValue(this.#encryptionKey, `link-audit:${row.id}:detail`, detailCiphertext)
+					: null,
+			};
+		});
 	}
 
 	upsertRocketBinding({ customerChannelId, roomId, schemaVersion = 1 }) {
@@ -741,6 +1196,88 @@ export class CustomerIdentityStore {
 				updated_at AS updatedAt
 			FROM rocket_bindings WHERE customer_channel_id = ?
 		`).get(customerChannelId);
+	}
+
+	#verifiedSourceParticipant(sourceEndpointId, targetChannelId) {
+		assertOpaqueId(sourceEndpointId, 'sourceEndpointId');
+		assertOpaqueId(targetChannelId, 'targetChannelId');
+		const sourceEndpoint = this.#database.prepare(`
+			SELECT * FROM contact_endpoints WHERE id = ?
+		`).get(sourceEndpointId);
+		if (!sourceEndpoint?.contact_id || sourceEndpoint.verification_state !== 'verified') {
+			throw new Error('source endpoint must be verified and attached to a contact');
+		}
+		const participant = this.#database.prepare(`
+			SELECT 1 FROM channel_participants
+			WHERE customer_channel_id = ? AND contact_id = ?
+		`).get(targetChannelId, sourceEndpoint.contact_id);
+		if (!participant) {
+			throw new Error('source endpoint contact is not a participant in the target channel');
+		}
+		return sourceEndpoint;
+	}
+
+	#recordLinkAudit({
+		action,
+		targetChannelId,
+		sourceEndpointId = null,
+		claimedEndpointId = null,
+		challengeId = null,
+		approvalId = null,
+		mergeReviewId = null,
+		actorId,
+		outcome,
+		detail = null,
+	}) {
+		assertOpaqueId(targetChannelId, 'targetChannelId');
+		assertOpaqueId(actorId, 'actorId');
+		for (const [label, value] of Object.entries({
+			sourceEndpointId,
+			claimedEndpointId,
+			challengeId,
+			approvalId,
+			mergeReviewId,
+		})) {
+			if (value !== null && value !== undefined) assertOpaqueId(value, label);
+		}
+		if (typeof action !== 'string' || !action || typeof outcome !== 'string' || !outcome) {
+			throw new TypeError('audit action and outcome are required');
+		}
+		const auditId = createId('aud');
+		this.#database.prepare(`
+			INSERT INTO identity_link_audit(
+				id, action, target_channel_id, source_endpoint_id,
+				claimed_endpoint_id, challenge_id, approval_id, merge_review_id,
+				actor_id, outcome, detail_ciphertext, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`).run(
+			auditId,
+			action,
+			targetChannelId,
+			sourceEndpointId,
+			claimedEndpointId,
+			challengeId,
+			approvalId,
+			mergeReviewId,
+			actorId,
+			outcome,
+			detail === null
+				? null
+				: encryptValue(this.#encryptionKey, `link-audit:${auditId}:detail`, String(detail)),
+			this.#now(),
+		);
+	}
+
+	#ensureColumn(table, column, definition) {
+		if (!/^[a-z_]+$/.test(table) || !/^[a-z_]+$/.test(column)) {
+			throw new Error('unsafe migration identifier');
+		}
+		const columns = new Set(
+			this.#database.prepare(`PRAGMA table_info(${table})`).all().map(({ name }) => name),
+		);
+		if (!columns.has(column)) {
+			this.#database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+		}
 	}
 
 	#normalizeProviderThread(provider, providerThreadId) {

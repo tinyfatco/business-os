@@ -29,5 +29,22 @@ Link challenges prove control of a claimed endpoint. Verification attaches a
 new endpoint to the source contact, but it never merges two existing contacts
 or customer channels. Those collisions create a merge review.
 
+Before creating a challenge, `suggestEndpointLink` returns only a safe label
+and the required next decision; it does not mutate identity state. A trusted
+operator can instead call `approveEndpointLink` with an explicit reason.
+Operator approval is audited and still creates a merge review rather than
+moving an endpoint that already belongs to another contact.
+
+Challenge guesses are bounded by a configurable attempt limit. Challenge
+starts, failed attempts, successful links, operator approvals, and merge-review
+decisions are retained in the link audit. Approving a collision records the
+decision as `approved-pending-merge`; it does not silently combine customer
+histories or reassign the endpoint.
+
+`CustomerIdentityLinkService` is the normal mutation boundary. It pairs those
+identity changes with immutable `endpoint.*` events in the customer awareness
+stream, including private failed verification attempts and channel-visible
+verification, linking, approval, and merge-review facts.
+
 This spike uses Node's built-in SQLite API, matching the existing hostd
 prototype. Hostd remains the intended single writer.

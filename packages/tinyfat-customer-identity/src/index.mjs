@@ -7,3 +7,4 @@ export {
 	normalizeEndpoint,
 } from './endpoint.mjs';
 export { CustomerIdentityStore } from './store.mjs';
+export { CustomerIdentityLinkService } from './service.mjs';

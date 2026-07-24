@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { CustomerIdentityStore, normalizeEndpoint } from './index.mjs';
+import { EncryptedJsonlAwarenessStore } from '../../tinyfat-awareness/src/index.mjs';
+import {
+	CustomerIdentityLinkService,
+	CustomerIdentityStore,
+	normalizeEndpoint,
+} from './index.mjs';
 
 const lookupKey = Buffer.alloc(32, 11);
 const encryptionKey = Buffer.alloc(32, 17);
@@ -284,4 +289,245 @@ test('requires merge review when a verified endpoint belongs to another contact'
 		}).customerChannelId,
 		other.channelId,
 	);
+});
+
+test('suggests without mutation and supports an audited operator-approved link', async () => {
+	const { path, store } = await createStore();
+	const relationship = createRelationship(store);
+	assert.deepEqual(
+		store.suggestEndpointLink({
+			sourceEndpointId: relationship.endpointId,
+			targetChannelId: relationship.channelId,
+			claimedKind: 'phone',
+			claimedValue: '+1 512 555 0188',
+		}),
+		{
+			disposition: 'suggested',
+			reason: 'new-endpoint',
+			label: 'phone ending 0188',
+			requires: 'challenge-or-operator-approval',
+		},
+	);
+	assert.equal(
+		store.resolveInbound({
+			provider: 'sendly',
+			providerThreadId: 'before-operator-approval',
+			endpointKind: 'phone',
+			endpointValue: '+1 512 555 0188',
+		}).disposition,
+		'unknown',
+	);
+
+	const approved = store.approveEndpointLink({
+		id: 'apr_acme_phone',
+		sourceEndpointId: relationship.endpointId,
+		targetChannelId: relationship.channelId,
+		claimedKind: 'phone',
+		claimedValue: '+1 512 555 0188',
+		approvedBy: 'human_alex',
+		reason: 'Customer confirmed the phone during a live operator conversation.',
+	});
+	assert.equal(approved.disposition, 'linked');
+	assert.equal(approved.endpoint.label, 'phone ending 0188');
+	assert.equal(
+		store.resolveInbound({
+			provider: 'sendly',
+			providerThreadId: 'after-operator-approval',
+			endpointKind: 'phone',
+			endpointValue: '+1 512 555 0188',
+		}).customerChannelId,
+		relationship.channelId,
+	);
+	assert.deepEqual(
+		store.listLinkAudit(relationship.channelId).map(({ action, actorId, outcome }) => ({
+			action,
+			actorId,
+			outcome,
+		})),
+		[{
+			action: 'operator.approved',
+			actorId: 'human_alex',
+			outcome: 'linked',
+		}],
+	);
+
+	store.close();
+	const bytes = await readFile(path);
+	assert.equal(bytes.includes(Buffer.from('+15125550188')), false);
+	assert.equal(bytes.includes(Buffer.from('Customer confirmed the phone')), false);
+});
+
+test('operator approval cannot silently absorb another contact and records the merge decision', async () => {
+	const { store } = await createStore();
+	const acme = createRelationship(store);
+	const other = createRelationship(store, {
+		channelId: 'cus_other_operator',
+		contextId: 'ctx_other_operator',
+		contactId: 'con_other_operator',
+		endpointId: 'end_other_operator_email',
+		email: 'operator-other@example.net',
+	});
+	store.observeEndpoint({
+		id: 'end_other_operator_phone',
+		contactId: other.contactId,
+		kind: 'phone',
+		value: '+1 512 555 0177',
+		source: 'sendly',
+		verificationState: 'verified',
+	});
+
+	const suggestion = store.suggestEndpointLink({
+		sourceEndpointId: acme.endpointId,
+		targetChannelId: acme.channelId,
+		claimedKind: 'phone',
+		claimedValue: '+1 512 555 0177',
+	});
+	assert.equal(suggestion.disposition, 'review-required');
+	assert.deepEqual(suggestion.conflictingCustomerChannelIds, [other.channelId]);
+
+	const approval = store.approveEndpointLink({
+		id: 'apr_collision',
+		sourceEndpointId: acme.endpointId,
+		targetChannelId: acme.channelId,
+		claimedKind: 'phone',
+		claimedValue: '+1 512 555 0177',
+		approvedBy: 'human_alex',
+		reason: 'Operator wants this possible collision reviewed, not auto-merged.',
+	});
+	assert.equal(approval.disposition, 'merge-required');
+	assert.equal(store.listMergeReviews()[0].status, 'pending');
+	const decision = store.resolveMergeReview({
+		reviewId: approval.reviewId,
+		decision: 'approved',
+		decidedBy: 'human_alex',
+		note: 'Evidence is sufficient, but a separate merge operation must preserve both histories.',
+	});
+	assert.equal(decision.disposition, 'approved-pending-merge');
+	assert.equal(store.listMergeReviews()[0].decidedBy, 'human_alex');
+	assert.equal(
+		store.resolveInbound({
+			provider: 'sendly',
+			providerThreadId: 'still-other-contact',
+			endpointKind: 'phone',
+			endpointValue: '+1 512 555 0177',
+		}).customerChannelId,
+		other.channelId,
+		'approval records a decision but does not silently move the endpoint',
+	);
+	assert.deepEqual(
+		store.listLinkAudit(acme.channelId).map(({ action, outcome }) => ({ action, outcome })),
+		[
+			{ action: 'operator.approved', outcome: 'merge-required' },
+			{ action: 'merge-review.decided', outcome: 'approved' },
+		],
+	);
+	store.close();
+});
+
+test('link challenges stop accepting guesses at the configured attempt limit', async () => {
+	const { store } = await createStore();
+	const relationship = createRelationship(store);
+	const challenge = store.startLinkChallenge({
+		id: 'lnk_attempt_limit',
+		sourceEndpointId: relationship.endpointId,
+		targetChannelId: relationship.channelId,
+		claimedKind: 'phone',
+		claimedValue: '+1 512 555 0166',
+		code: '884422',
+		initiatedBy: 'human_alex',
+		maxAttempts: 2,
+	});
+	assert.deepEqual(
+		store.verifyLinkChallenge({ challengeId: challenge.id, code: '000000', verifiedBy: 'contact_acme' }),
+		{ disposition: 'failed', reason: 'incorrect-code' },
+	);
+	assert.deepEqual(
+		store.verifyLinkChallenge({ challengeId: challenge.id, code: '111111', verifiedBy: 'contact_acme' }),
+		{ disposition: 'failed', reason: 'incorrect-code' },
+	);
+	assert.deepEqual(
+		store.verifyLinkChallenge({ challengeId: challenge.id, code: '884422', verifiedBy: 'contact_acme' }),
+		{ disposition: 'failed', reason: 'challenge-not-pending' },
+	);
+	assert.deepEqual(
+		store.listLinkAudit(relationship.channelId).map(({ action, actorId, outcome }) => ({
+			action,
+			actorId,
+			outcome,
+		})),
+		[
+			{ action: 'challenge.started', actorId: 'human_alex', outcome: 'pending' },
+			{ action: 'challenge.verified', actorId: 'contact_acme', outcome: 'incorrect-code' },
+			{ action: 'challenge.verified', actorId: 'contact_acme', outcome: 'attempt-limit-reached' },
+		],
+	);
+	store.close();
+});
+
+test('identity service writes challenge and operator decisions into the canonical awareness stream', async () => {
+	const { directory, store } = await createStore();
+	const relationship = createRelationship(store);
+	const awarenessStore = new EncryptedJsonlAwarenessStore({
+		rootDirectory: join(directory, 'awareness'),
+		encryptionKey,
+		clock: () => new Date(testNow),
+	});
+	const service = new CustomerIdentityLinkService({
+		identityStore: store,
+		awarenessStore,
+		clock: () => new Date(testNow),
+	});
+	const actor = { kind: 'human', id: 'human_alex', display: 'Alex' };
+	const source = { surface: 'rocket-chat', ref: 'customer-room:acme-link' };
+	const started = await service.startChallenge({
+		id: 'lnk_service_phone',
+		sourceEndpointId: relationship.endpointId,
+		targetChannelId: relationship.channelId,
+		claimedKind: 'phone',
+		claimedValue: '+1 512 555 0155',
+		code: '551155',
+		actor,
+		source,
+	});
+	await service.verifyChallenge({
+		challengeId: started.challenge.id,
+		code: 'wrong',
+		actor: { kind: 'contact', id: 'contact_acme' },
+		source: { surface: 'web', ref: 'verification-form:acme' },
+	});
+	const linked = await service.verifyChallenge({
+		challengeId: started.challenge.id,
+		code: '551155',
+		actor: { kind: 'contact', id: 'contact_acme' },
+		source: { surface: 'web', ref: 'verification-form:acme' },
+	});
+	assert.equal(linked.disposition, 'linked');
+
+	const approved = await service.approve({
+		id: 'apr_service_email',
+		sourceEndpointId: relationship.endpointId,
+		targetChannelId: relationship.channelId,
+		claimedKind: 'email',
+		claimedValue: 'billing@acme.example',
+		reason: 'Customer confirmed the billing alias with Alex.',
+		actor,
+		source,
+	});
+	assert.equal(approved.disposition, 'linked');
+	assert.deepEqual(
+		(await awarenessStore.read(relationship.channelId)).map(({ eventType }) => eventType),
+		[
+			'endpoint.challenge.started',
+			'endpoint.challenge.failed',
+			'endpoint.verified',
+			'endpoint.linked',
+			'endpoint.link.approved',
+			'endpoint.linked',
+		],
+	);
+	assert.equal(
+		(await awarenessStore.read(relationship.channelId))[4].payload.reason,
+		'Customer confirmed the billing alias with Alex.',
+	);
+	store.close();
 });

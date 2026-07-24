@@ -8,7 +8,10 @@ import {
 	RelationshipGrantStore,
 	ScopedRelationshipCollaboration,
 } from '../packages/tinyfat-collaboration/src/index.mjs';
-import { CustomerIdentityStore } from '../packages/tinyfat-customer-identity/src/index.mjs';
+import {
+	CustomerIdentityLinkService,
+	CustomerIdentityStore,
+} from '../packages/tinyfat-customer-identity/src/index.mjs';
 import {
 	CustomerAwarenessProjector,
 	RocketChatClient,
@@ -106,60 +109,27 @@ try {
 
 	const challengeId = `lnk_phone_${runId}`;
 	const challengeCode = '482193';
-	const challenge = identityStore.startLinkChallenge({
+	const identityLinks = new CustomerIdentityLinkService({
+		identityStore,
+		awarenessStore,
+	});
+	await identityLinks.startChallenge({
 		id: challengeId,
 		sourceEndpointId: emailEndpoint.id,
 		targetChannelId: customerChannelId,
 		claimedKind: 'phone',
 		claimedValue: customerPhone,
 		code: challengeCode,
-		initiatedBy: 'human_alex',
-	});
-	await awarenessStore.append({
-		eventId: `evt_link_started_${runId}`,
-		customerChannelId,
-		eventType: 'endpoint.challenge.started',
-		occurredAt,
 		actor: { kind: 'human', id: 'human_alex', display: 'Alex' },
 		source: { surface: 'hostd', ref: `identity-challenge:${runId}` },
-		visibility: { class: 'restricted', grants: [] },
-		payload: {
-			challengeId,
-			sourceEndpointId: emailEndpoint.id,
-			claimedKind: 'phone',
-			expiresAt: challenge.expiresAt,
-		},
 	});
-	const linked = identityStore.verifyLinkChallenge({ challengeId, code: challengeCode });
+	const linked = await identityLinks.verifyChallenge({
+		challengeId,
+		code: challengeCode,
+		actor: { kind: 'contact', id: contactId, display: 'Example Customer' },
+		source: { surface: 'web', ref: `verification-form:${runId}` },
+	});
 	if (linked.disposition !== 'linked') throw new Error(`local link failed: ${linked.disposition}`);
-	await awarenessStore.append({
-		eventId: `evt_link_verified_${runId}`,
-		customerChannelId,
-		eventType: 'endpoint.verified',
-		occurredAt,
-		actor: { kind: 'system', id: 'system_hostd' },
-		source: { surface: 'hostd', ref: `identity-challenge:${runId}` },
-		visibility: { class: 'channel', grants: [] },
-		payload: {
-			challengeId,
-			endpointId: linked.endpoint.id,
-			kind: linked.endpoint.kind,
-			label: linked.endpoint.label,
-		},
-	});
-	await awarenessStore.append({
-		eventId: `evt_linked_${runId}`,
-		customerChannelId,
-		eventType: 'endpoint.linked',
-		occurredAt,
-		actor: { kind: 'system', id: 'system_hostd' },
-		source: { surface: 'hostd', ref: `identity-link:${runId}` },
-		visibility: { class: 'channel', grants: [] },
-		payload: {
-			emailEndpointId: emailEndpoint.id,
-			phoneEndpointId: linked.endpoint.id,
-		},
-	});
 
 	const fakeProviderCalls = [];
 	const sendlyTransport = new TestScopedSendlyTransport({
