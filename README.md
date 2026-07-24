@@ -56,6 +56,8 @@ The first working slice is TinyFat's Websites for People workflow:
 
 The detailed spike contract lives in
 [`docs/architecture/customer-awareness-stream.md`](docs/architecture/customer-awareness-stream.md).
+The reproducible verification and ownership boundary are in
+[`docs/spike-runbook.md`](docs/spike-runbook.md).
 The repaired community build boundary is documented in
 [`docs/architecture/foss-capability-boundary.md`](docs/architecture/foss-capability-boundary.md).
 
@@ -91,13 +93,22 @@ node scripts/spike-local-cross-channel.mjs
 That script injects its own fake `fetch` implementation. It makes no Sendly
 network request and does not create, replace, or repoint a webhook.
 
+Run every focused proof, and optionally the self-managed Rocket integration,
+with:
+
+```bash
+node scripts/verify-tinyfat-spike.mjs
+TINYFAT_VERIFY_ROCKET=1 node scripts/verify-tinyfat-spike.mjs
+```
+
 Rocket.Chat is a trademark of Rocket.Chat Technologies Corp. TinyFat Business
 OS is an independent TinyFat project and is not endorsed by Rocket.Chat.
 
 ## Status
 
-This is an active spike. The imported messaging platform, awareness stream,
+This is a working spike. The imported messaging platform, awareness stream,
 identity graph, relationship-scoped collaboration grants, Rocket.Chat
 projector, and Troublemaker hostd bridge are present. Native Gmail has completed
-one end-to-end local customer-channel proof. Safe Sendly ingress and delivery
-remain isolated from live routes until their local replay test is complete.
+one end-to-end local customer-channel proof. Signed Sendly ingress, verified
+email/phone linking, scoped Batman/Manny work, agent-authored fake delivery,
+and complete Rocket replay have passed locally without touching live routes.
