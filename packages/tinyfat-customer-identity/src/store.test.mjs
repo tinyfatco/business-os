@@ -108,6 +108,40 @@ test('resolves a unique endpoint and then a bound provider thread', async () => 
 	);
 });
 
+test('reveals a delivery value only for a verified endpoint in the named channel', async () => {
+	const { store } = await createStore();
+	const relationship = createRelationship(store);
+	assert.deepEqual(
+		store.getVerifiedEndpointForChannel({
+			customerChannelId: relationship.channelId,
+			endpointId: relationship.endpointId,
+			kind: 'email',
+		}),
+		{
+			id: relationship.endpointId,
+			contactId: relationship.contactId,
+			kind: 'email',
+			label: 'o***@acme.example',
+			value: 'owner@acme.example',
+			verificationState: 'verified',
+		},
+	);
+
+	store.createCustomerChannel({
+		id: 'cus_other_delivery_scope',
+		contextId: 'ctx_other_delivery_scope',
+		displayName: 'Other delivery scope',
+	});
+	assert.throws(
+		() => store.getVerifiedEndpointForChannel({
+			customerChannelId: 'cus_other_delivery_scope',
+			endpointId: relationship.endpointId,
+			kind: 'email',
+		}),
+		/endpoint is not a participant/,
+	);
+});
+
 test('quarantines an unexpected sender on a known provider thread', async () => {
 	const { store } = await createStore();
 	const acme = createRelationship(store);

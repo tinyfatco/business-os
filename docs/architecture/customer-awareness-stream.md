@@ -219,6 +219,9 @@ without changing which record is canonical.
 - `@tinyfat/relationship-collaboration` issues expiring, revocable,
   relationship-scoped human and agent grants; stores only HMAC bearer lookups;
   and enforces scoped awareness reads and provenance-preserving appends.
+- `@tinyfat/sendly-bridge` verifies signed Sendly ingress, resolves linked phone
+  identities, and records explicit agent-authored test delivery plus provider
+  receipts without changing or automatically answering a live Sendly route.
 - `@tinyfat/rocket-projection` creates private customer rooms, renders
   visibility-filtered awareness events with provenance, and records a durable
   idempotent projection ledger.

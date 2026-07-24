@@ -79,6 +79,18 @@ the contained demo relationship with:
 node scripts/spike-local-customer-channel.mjs
 ```
 
+The fuller local-only replay links a fake verified phone to the email
+relationship, ingests a signed Sendly fixture for the configured
+`(737) 330-0002` sender, performs scoped Batman/Manny collaboration, records an
+agent-authored fake SMS receipt, and projects the one stream twice:
+
+```bash
+node scripts/spike-local-cross-channel.mjs
+```
+
+That script injects its own fake `fetch` implementation. It makes no Sendly
+network request and does not create, replace, or repoint a webhook.
+
 Rocket.Chat is a trademark of Rocket.Chat Technologies Corp. TinyFat Business
 OS is an independent TinyFat project and is not endorsed by Rocket.Chat.
 

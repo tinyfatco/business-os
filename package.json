@@ -27,6 +27,7 @@
 		"fossify": "TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\"}' ts-node scripts/fossify.ts",
 		"check:foss": "node scripts/check-foss-tree.mjs",
 		"spike:local-customer-channel": "node scripts/spike-local-customer-channel.mjs",
+		"spike:local-cross-channel": "node scripts/spike-local-cross-channel.mjs",
 		"fuselage": "./fuselage.sh",
 		"lint": "turbo run lint",
 		"storybook": "yarn workspace @rocket.chat/meteor run storybook",

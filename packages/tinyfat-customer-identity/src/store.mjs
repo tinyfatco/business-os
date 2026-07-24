@@ -309,6 +309,39 @@ export class CustomerIdentityStore {
 		return decryptValue(this.#encryptionKey, `endpoint:${row.id}`, row.value_ciphertext);
 	}
 
+	getVerifiedEndpointForChannel({ customerChannelId, endpointId, kind }) {
+		assertOpaqueId(customerChannelId, 'customerChannelId');
+		assertOpaqueId(endpointId, 'endpointId');
+		const row = this.#database.prepare(`
+			SELECT endpoint.*
+			FROM contact_endpoints endpoint
+			JOIN channel_participants participant
+				ON participant.contact_id = endpoint.contact_id
+			WHERE participant.customer_channel_id = ?
+				AND endpoint.id = ?
+		`).get(customerChannelId, endpointId);
+
+		if (!row) {
+			throw new Error('endpoint is not a participant in the customer channel');
+		}
+		if (row.verification_state !== 'verified') {
+			throw new Error('endpoint is not verified');
+		}
+		if (kind !== undefined && row.kind !== kind) {
+			throw new Error(`endpoint is not a verified ${kind}`);
+		}
+
+		const normalized = decryptValue(this.#encryptionKey, `endpoint:${row.id}`, row.value_ciphertext);
+		return {
+			id: row.id,
+			contactId: row.contact_id,
+			kind: row.kind,
+			label: getSafeEndpointLabel(row.kind, normalized),
+			value: normalized,
+			verificationState: row.verification_state,
+		};
+	}
+
 	addParticipant({ customerChannelId, contactId, relationshipRole = 'customer' }) {
 		assertOpaqueId(customerChannelId, 'customerChannelId');
 		assertOpaqueId(contactId, 'contactId');
