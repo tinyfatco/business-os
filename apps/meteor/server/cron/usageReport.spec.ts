@@ -1,9 +1,9 @@
-import { AirGappedRestriction } from '@rocket.chat/license';
+import { AirGappedRestriction } from '@tinyfat/community-policy';
 import { Statistics } from '@rocket.chat/models';
 
 import { sendUsageReportAndComputeRestriction } from './usageReport';
 
-jest.mock('@rocket.chat/license', () => ({
+jest.mock('@tinyfat/community-policy', () => ({
 	AirGappedRestriction: {
 		computeRestriction: jest.fn(),
 	},

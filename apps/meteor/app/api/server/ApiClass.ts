@@ -1,6 +1,6 @@
 import type { IMethodConnection, IUser } from '@rocket.chat/core-typings';
 import type { Route, Router } from '@rocket.chat/http-router';
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 import { Logger } from '@rocket.chat/logger';
 import { Users } from '@rocket.chat/models';
 import { Random } from '@rocket.chat/random';

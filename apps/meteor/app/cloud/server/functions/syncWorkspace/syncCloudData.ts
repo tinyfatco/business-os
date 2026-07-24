@@ -1,4 +1,4 @@
-import { DuplicatedLicenseError } from '@rocket.chat/license';
+import { DuplicatedLicenseError } from '@tinyfat/community-policy';
 import { Settings } from '@rocket.chat/models';
 
 import { fetchWorkspaceSyncPayload } from './fetchWorkspaceSyncPayload';

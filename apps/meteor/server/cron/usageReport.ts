@@ -1,5 +1,5 @@
 import { cronJobs } from '@rocket.chat/cron';
-import { AirGappedRestriction } from '@rocket.chat/license';
+import { AirGappedRestriction } from '@tinyfat/community-policy';
 import type { Logger } from '@rocket.chat/logger';
 import { Statistics } from '@rocket.chat/models';
 

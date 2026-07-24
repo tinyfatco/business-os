@@ -1,4 +1,4 @@
-import { applyLicense } from '@rocket.chat/license';
+import { applyLicense } from '@tinyfat/community-policy';
 import { Settings } from '@rocket.chat/models';
 
 import { syncCloudData } from './syncWorkspace/syncCloudData';

@@ -1,0 +1,105 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://tinyfat.com/schemas/customer-awareness-event-v1.json",
+	"title": "TinyFat customer awareness event",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"schema",
+		"eventId",
+		"customerChannelId",
+		"sequence",
+		"eventType",
+		"occurredAt",
+		"recordedAt",
+		"actor",
+		"source",
+		"visibility",
+		"causationId",
+		"correlationId",
+		"payload"
+	],
+	"properties": {
+		"schema": {
+			"const": 1
+		},
+		"eventId": {
+			"type": "string",
+			"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{2,191}$"
+		},
+		"customerChannelId": {
+			"type": "string",
+			"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{2,191}$"
+		},
+		"sequence": {
+			"type": "integer",
+			"minimum": 1
+		},
+		"eventType": {
+			"type": "string"
+		},
+		"occurredAt": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"recordedAt": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"actor": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["kind", "id"],
+			"properties": {
+				"kind": {
+					"enum": ["contact", "human", "agent", "system"]
+				},
+				"id": {
+					"type": "string"
+				},
+				"display": {
+					"type": "string"
+				}
+			}
+		},
+		"source": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["surface", "ref"],
+			"properties": {
+				"surface": {
+					"enum": ["email", "sms", "rocket-chat", "slack", "troublemaker", "hostd", "web", "system"]
+				},
+				"ref": {
+					"type": "string"
+				}
+			}
+		},
+		"visibility": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["class", "grants"],
+			"properties": {
+				"class": {
+					"enum": ["customer", "channel", "restricted", "private"]
+				},
+				"grants": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"uniqueItems": true
+				}
+			}
+		},
+		"causationId": {
+			"type": ["string", "null"]
+		},
+		"correlationId": {
+			"type": ["string", "null"]
+		},
+		"payload": {
+			"type": "object"
+		}
+	}
+}

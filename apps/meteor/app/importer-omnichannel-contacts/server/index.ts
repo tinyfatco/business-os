@@ -1,4 +1,4 @@
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 
 import { ContactImporter } from './ContactImporter';
 import { Importers } from '../../importer/server';

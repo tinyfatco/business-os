@@ -1,5 +1,5 @@
 import type { IImportUser, IUser } from '@rocket.chat/core-typings';
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 import type { Logger } from '@rocket.chat/logger';
 import { Users } from '@rocket.chat/models';
 

@@ -1,7 +1,19 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const restrictedRoots = ['ee', 'apps/meteor/ee'];
+const removedWorkspacePackages = [
+	'@rocket.chat/abac',
+	'@rocket.chat/federation-matrix',
+	'@rocket.chat/license',
+	'@rocket.chat/media-calls',
+	'@rocket.chat/network-broker',
+	'@rocket.chat/omni-core-ee',
+	'@rocket.chat/omnichannel-services',
+	'@rocket.chat/pdf-worker',
+	'@rocket.chat/presence',
+];
 const failures = [];
 
 for (const root of restrictedRoots) {
@@ -34,6 +46,36 @@ const restrictedWorkspace = packageJson.workspaces.find((workspace) => workspace
 
 if (restrictedWorkspace) {
 	failures.push(`restricted workspace pattern remains: ${restrictedWorkspace}`);
+}
+
+const workspaceManifests = packageJson.workspaces.flatMap((pattern) => {
+	const root = pattern.replace(/\/\*$/, '');
+
+	if (!existsSync(root)) {
+		return [];
+	}
+
+	return readdirSync(root, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => join(root, entry.name, 'package.json'))
+		.filter(existsSync)
+		.map((file) => ({ file, manifest: JSON.parse(readFileSync(file, 'utf8')) }));
+});
+const workspaceNames = new Set(workspaceManifests.map(({ manifest }) => manifest.name).filter(Boolean));
+const dependencySections = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
+
+for (const { file, manifest } of workspaceManifests) {
+	for (const section of dependencySections) {
+		for (const [name, range] of Object.entries(manifest[section] ?? {})) {
+			if (removedWorkspacePackages.includes(name)) {
+				failures.push(`removed workspace package ${name} remains in ${file}`);
+			}
+
+			if (typeof range === 'string' && range.startsWith('workspace:') && !workspaceNames.has(name)) {
+				failures.push(`unresolved workspace dependency ${name} remains in ${file}`);
+			}
+		}
+	}
 }
 
 const startupPath = 'apps/meteor/startRocketChat.ts';

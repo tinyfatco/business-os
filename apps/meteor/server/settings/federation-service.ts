@@ -1,4 +1,4 @@
-import { generateEd25519RandomSecretKey } from '@rocket.chat/federation-matrix';
+import { generateEd25519RandomSecretKey } from '@tinyfat/federation-community';
 
 import { settingsRegistry } from '../../app/settings/server';
 

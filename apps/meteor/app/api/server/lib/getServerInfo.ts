@@ -1,5 +1,5 @@
 import type { IWorkspaceInfo } from '@rocket.chat/core-typings';
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 
 import { getTrimmedServerVersion } from './getTrimmedServerVersion';
 import { hasPermissionAsync } from '../../../authorization/server/functions/hasPermission';

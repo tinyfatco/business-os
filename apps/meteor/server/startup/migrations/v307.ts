@@ -1,6 +1,6 @@
 import { Apps } from '@rocket.chat/apps';
 import type { IAppStorageItem } from '@rocket.chat/apps/dist/server/storage/IAppStorageItem';
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 
 import { addMigration } from '../../lib/migrations';
 

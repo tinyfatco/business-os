@@ -1,7 +1,7 @@
 import { api, FederationMatrix, isMeteorError } from '@rocket.chat/core-services';
 import type { IUser, SlashCommandCallbackParams } from '@rocket.chat/core-typings';
 import { isBannedSubscription } from '@rocket.chat/core-typings';
-import { validateFederatedUsername } from '@rocket.chat/federation-matrix';
+import { validateFederatedUsername } from '@tinyfat/federation-community';
 import { Subscriptions, Users, Rooms } from '@rocket.chat/models';
 import { Meteor } from 'meteor/meteor';
 

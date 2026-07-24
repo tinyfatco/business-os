@@ -1,0 +1,25 @@
+name: TinyFat spike
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  focused-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.3
+          cache: yarn
+      - run: node .yarn/releases/yarn-4.12.0.cjs workspaces focus @tinyfat/community-policy @tinyfat/federation-community @tinyfat/customer-awareness
+      - run: node .yarn/releases/yarn-4.12.0.cjs workspace @tinyfat/community-policy build
+      - run: node .yarn/releases/yarn-4.12.0.cjs workspace @tinyfat/federation-community build
+      - run: node --test packages/tinyfat-awareness/src/*.test.mjs
+      - run: node scripts/check-foss-tree.mjs

@@ -1,6 +1,6 @@
 import { ServiceStarter } from '@rocket.chat/core-services';
 import { LivechatInquiryStatus, type InquiryWithAgentInfo, type IOmnichannelQueue } from '@rocket.chat/core-typings';
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 import { LivechatInquiry, LivechatRooms } from '@rocket.chat/models';
 import { tracerSpan } from '@rocket.chat/tracing';
 

@@ -1,5 +1,5 @@
 import type { SettingValue } from '@rocket.chat/core-typings';
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 import { Settings } from '@rocket.chat/models';
 import type { SignedSupportedVersions, SupportedVersions } from '@rocket.chat/server-cloud-communication';
 import type { Response } from '@rocket.chat/server-fetch';

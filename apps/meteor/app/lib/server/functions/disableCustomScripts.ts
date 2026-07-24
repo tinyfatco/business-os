@@ -1,4 +1,4 @@
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 
 export const disableCustomScripts = () => {
 	const license = License.getLicense();

@@ -53,6 +53,8 @@ The first working slice is TinyFat's Websites for People workflow:
 
 The detailed spike contract lives in
 [`docs/architecture/customer-awareness-stream.md`](docs/architecture/customer-awareness-stream.md).
+The repaired community build boundary is documented in
+[`docs/architecture/foss-capability-boundary.md`](docs/architecture/foss-capability-boundary.md).
 
 ## Source and licensing
 

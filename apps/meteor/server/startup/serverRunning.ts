@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { License } from '@rocket.chat/license';
+import { License } from '@tinyfat/community-policy';
 // import { Users } from '@rocket.chat/models';
 import { Meteor } from 'meteor/meteor';
 import semver from 'semver';
