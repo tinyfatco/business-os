@@ -10200,7 +10200,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@rocket.chat/tsconfig@workspace:*, @rocket.chat/tsconfig@workspace:packages/tsconfig":
+"@rocket.chat/tsconfig@workspace:*, @rocket.chat/tsconfig@workspace:^, @rocket.chat/tsconfig@workspace:packages/tsconfig":
   version: 0.0.0-use.local
   resolution: "@rocket.chat/tsconfig@workspace:packages/tsconfig"
   languageName: unknown
@@ -12615,6 +12615,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@tinyfat/community-policy@workspace:packages/tinyfat-community-policy"
   dependencies:
+    "@rocket.chat/tsconfig": "workspace:^"
     eslint: "npm:~9.39.4"
     typescript: "npm:~5.9.3"
   languageName: unknown
@@ -12626,10 +12627,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@tinyfat/customer-identity@workspace:packages/tinyfat-customer-identity":
+  version: 0.0.0-use.local
+  resolution: "@tinyfat/customer-identity@workspace:packages/tinyfat-customer-identity"
+  languageName: unknown
+  linkType: soft
+
 "@tinyfat/federation-community@workspace:^, @tinyfat/federation-community@workspace:packages/tinyfat-federation-community":
   version: 0.0.0-use.local
   resolution: "@tinyfat/federation-community@workspace:packages/tinyfat-federation-community"
   dependencies:
+    "@rocket.chat/tsconfig": "workspace:^"
     "@types/node": "npm:~22.19.17"
     eslint: "npm:~9.39.4"
     typescript: "npm:~5.9.3"

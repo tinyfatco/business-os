@@ -204,3 +204,16 @@ Provider receipts are recorded before a projection claims delivery.
 
 SMS identity linking and Batman-from-Slack collaboration extend this slice
 without changing which record is canonical.
+
+## Implemented spike packages
+
+- `@tinyfat/customer-awareness` implements encrypted append-only awareness
+  events, ordering, idempotency, replay, integrity checks, and scoped reads.
+- `@tinyfat/customer-identity` implements encrypted contacts/endpoints,
+  customer-channel participation, native provider-thread binding, fail-closed
+  inbound resolution, verified endpoint challenges, merge review, and
+  Rocket.Chat room bindings.
+
+Both are host-owned primitives. Neither grants a child Troublemaker runtime
+provider credentials, unrestricted endpoint values, or workspace-wide room
+access.
