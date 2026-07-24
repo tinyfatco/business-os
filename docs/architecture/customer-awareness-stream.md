@@ -216,6 +216,9 @@ without changing which record is canonical.
   customer-channel participation, native provider-thread binding, fail-closed
   inbound resolution, verified endpoint challenges, merge review, and
   Rocket.Chat room bindings.
+- `@tinyfat/relationship-collaboration` issues expiring, revocable,
+  relationship-scoped human and agent grants; stores only HMAC bearer lookups;
+  and enforces scoped awareness reads and provenance-preserving appends.
 - `@tinyfat/rocket-projection` creates private customer rooms, renders
   visibility-filtered awareness events with provenance, and records a durable
   idempotent projection ledger.

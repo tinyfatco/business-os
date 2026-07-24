@@ -85,6 +85,7 @@ OS is an independent TinyFat project and is not endorsed by Rocket.Chat.
 ## Status
 
 This is an active spike. The imported messaging platform, awareness stream,
-identity graph, and Rocket.Chat projector are present. Hostd ingress and the
-agent-facing interface are being implemented incrementally before live Manny
-or Sendly routes change.
+identity graph, relationship-scoped collaboration grants, Rocket.Chat
+projector, and Troublemaker hostd bridge are present. Native Gmail has completed
+one end-to-end local customer-channel proof. Safe Sendly ingress and delivery
+remain isolated from live routes until their local replay test is complete.
