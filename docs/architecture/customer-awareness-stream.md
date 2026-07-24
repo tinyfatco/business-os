@@ -169,6 +169,9 @@ external messages, internal collaboration, agent work, artifacts, and delivery
 state using namespaced TinyFat message metadata. Replaying the stream must
 reconstruct the meaningful room state.
 
+The workspace is self-managed. Initial setup skips Rocket.Chat Cloud
+registration, and the projector talks only to the configured workspace API.
+
 ### Troublemaker
 
 A customer Manny receives a visibility-filtered awareness slice plus durable
@@ -213,7 +216,10 @@ without changing which record is canonical.
   customer-channel participation, native provider-thread binding, fail-closed
   inbound resolution, verified endpoint challenges, merge review, and
   Rocket.Chat room bindings.
+- `@tinyfat/rocket-projection` creates private customer rooms, renders
+  visibility-filtered awareness events with provenance, and records a durable
+  idempotent projection ledger.
 
-Both are host-owned primitives. Neither grants a child Troublemaker runtime
+All three are host-owned primitives. None grants a child Troublemaker runtime
 provider credentials, unrestricted endpoint values, or workspace-wide room
 access.

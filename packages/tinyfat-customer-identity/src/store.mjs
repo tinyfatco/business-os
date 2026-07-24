@@ -701,6 +701,15 @@ export class CustomerIdentityStore {
 		`).get(customerChannelId);
 	}
 
+	getRocketBinding(customerChannelId) {
+		return this.#database.prepare(`
+			SELECT customer_channel_id AS customerChannelId, room_id AS roomId,
+				schema_version AS schemaVersion, created_at AS createdAt,
+				updated_at AS updatedAt
+			FROM rocket_bindings WHERE customer_channel_id = ?
+		`).get(customerChannelId);
+	}
+
 	#normalizeProviderThread(provider, providerThreadId) {
 		if (typeof provider !== 'string' || provider.length === 0) {
 			throw new TypeError('provider must be a non-empty string');

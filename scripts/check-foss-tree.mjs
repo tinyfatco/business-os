@@ -42,7 +42,9 @@ if (tracked.status !== 0) {
 }
 
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
-const restrictedWorkspace = packageJson.workspaces.find((workspace) => workspace === 'ee' || workspace.startsWith('ee/') || workspace.includes('/ee/'));
+const restrictedWorkspace = packageJson.workspaces.find(
+	(workspace) => workspace === 'ee' || workspace.startsWith('ee/') || workspace.includes('/ee/'),
+);
 
 if (restrictedWorkspace) {
 	failures.push(`restricted workspace pattern remains: ${restrictedWorkspace}`);
@@ -94,6 +96,17 @@ if (!existsSync(startupPath)) {
 	}
 }
 
+const setupParametersPath = 'apps/meteor/server/methods/getSetupWizardParameters.ts';
+const cloudStartupPath = 'apps/meteor/server/startup/cloudRegistration.ts';
+
+if (!existsSync(setupParametersPath) || !readFileSync(setupParametersPath, 'utf8').includes('skipCloudRegistration: true')) {
+	failures.push('self-managed setup does not explicitly skip Rocket.Chat Cloud registration');
+}
+
+if (!existsSync(cloudStartupPath) || readFileSync(cloudStartupPath, 'utf8').includes('Settings.updateValueById')) {
+	failures.push('startup can still force Rocket.Chat Cloud registration');
+}
+
 if (failures.length > 0) {
 	for (const failure of failures) {
 		console.error(`FOSS boundary failure: ${failure}`);
@@ -102,4 +115,4 @@ if (failures.length > 0) {
 	process.exit(1);
 }
 
-console.log('FOSS boundary verified: restricted source is absent and FOSS startup is active.');
+console.log('FOSS boundary verified: restricted source is absent, FOSS startup is active, and setup is self-managed.');

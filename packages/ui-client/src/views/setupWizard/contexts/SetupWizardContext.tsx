@@ -54,7 +54,7 @@ export const SetupWizardContext = createContext<SetupWizarContextValue>({
 	setSetupWizardData: (data) => data,
 	loaded: false,
 	settings: [],
-	skipCloudRegistration: false,
+	skipCloudRegistration: true,
 	goToPreviousStep: () => undefined,
 	goToNextStep: () => undefined,
 	goToStep: () => undefined,

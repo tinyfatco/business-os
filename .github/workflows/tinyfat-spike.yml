@@ -18,9 +18,10 @@ jobs:
         with:
           node-version: 22.22.3
           cache: yarn
-      - run: node .yarn/releases/yarn-4.12.0.cjs workspaces focus @tinyfat/community-policy @tinyfat/federation-community @tinyfat/customer-awareness @tinyfat/customer-identity
+      - run: node .yarn/releases/yarn-4.12.0.cjs workspaces focus @tinyfat/community-policy @tinyfat/federation-community @tinyfat/customer-awareness @tinyfat/customer-identity @tinyfat/rocket-projection
       - run: node .yarn/releases/yarn-4.12.0.cjs workspace @tinyfat/community-policy build
       - run: node .yarn/releases/yarn-4.12.0.cjs workspace @tinyfat/federation-community build
       - run: node --test packages/tinyfat-awareness/src/*.test.mjs
       - run: node --test packages/tinyfat-customer-identity/src/*.test.mjs
+      - run: node --test packages/tinyfat-rocket-projection/src/*.test.mjs
       - run: node scripts/check-foss-tree.mjs

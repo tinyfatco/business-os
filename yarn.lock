@@ -12644,6 +12644,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@tinyfat/rocket-projection@workspace:packages/tinyfat-rocket-projection":
+  version: 0.0.0-use.local
+  resolution: "@tinyfat/rocket-projection@workspace:packages/tinyfat-rocket-projection"
+  languageName: unknown
+  linkType: soft
+
 "@tokenizer/token@npm:^0.3.0":
   version: 0.3.0
   resolution: "@tokenizer/token@npm:0.3.0"

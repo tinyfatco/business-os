@@ -10,6 +10,9 @@ append-only **customer awareness stream**. Rocket.Chat projects that stream
 into a collaborative workspace, hostd owns identity and provider delivery, and
 Troublemaker reasons and acts inside an isolated customer context.
 
+TinyFat Business OS is self-managed. Its setup flow does not create or require
+a Rocket.Chat Cloud registration.
+
 ```text
 email / SMS / Slack / workspace
               │
@@ -69,12 +72,19 @@ Run the FOSS boundary check with:
 node scripts/check-foss-tree.mjs
 ```
 
+With a local Rocket.Chat API credential in the environment, create and project
+the contained demo relationship with:
+
+```bash
+node scripts/spike-local-customer-channel.mjs
+```
+
 Rocket.Chat is a trademark of Rocket.Chat Technologies Corp. TinyFat Business
 OS is an independent TinyFat project and is not endorsed by Rocket.Chat.
 
 ## Status
 
-This is an active spike. The imported messaging platform is present; the
-TinyFat customer-awareness, identity, hostd bridge, and interface work are
-being implemented incrementally with tests before live Manny or Sendly routes
-change.
+This is an active spike. The imported messaging platform, awareness stream,
+identity graph, and Rocket.Chat projector are present. Hostd ingress and the
+agent-facing interface are being implemented incrementally before live Manny
+or Sendly routes change.

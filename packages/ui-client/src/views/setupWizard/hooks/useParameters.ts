@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 
 type SetupWizardParameters = {
 	settings: ISetting[];
-	serverAlreadyRegistered: boolean;
+	skipCloudRegistration: boolean;
 };
 
 export const useParameters = (): Exclude<UseQueryResult<SetupWizardParameters, Error>, { data: undefined }> => {
@@ -16,7 +16,7 @@ export const useParameters = (): Exclude<UseQueryResult<SetupWizardParameters, E
 		queryFn: getSetupWizardParameters,
 		initialData: {
 			settings: [],
-			serverAlreadyRegistered: false,
+			skipCloudRegistration: true,
 		},
 	}) as Exclude<UseQueryResult<SetupWizardParameters, Error>, { data: undefined }>;
 };

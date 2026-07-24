@@ -6,7 +6,7 @@ declare module '@rocket.chat/ddp-client' {
 	interface ServerMethods {
 		getSetupWizardParameters(): Promise<{
 			settings: ISetting[];
-			serverAlreadyRegistered: boolean;
+			skipCloudRegistration: boolean;
 		}>;
 		'cloud:getWorkspaceRegisterData': () => string;
 		registerUser(

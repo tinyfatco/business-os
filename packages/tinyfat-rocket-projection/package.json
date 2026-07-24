@@ -1,0 +1,14 @@
+{
+	"name": "@tinyfat/rocket-projection",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"description": "Rocket.Chat projection of canonical TinyFat customer awareness streams",
+	"exports": "./src/index.mjs",
+	"scripts": {
+		"test": "node --test src/*.test.mjs"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

@@ -474,7 +474,7 @@ export const createMessageSettings = () =>
 			public: true,
 		});
 
-		await this.add('Message_CustomFields_Enabled', false, {
+		await this.add('Message_CustomFields_Enabled', true, {
 			type: 'boolean',
 		});
 		await this.add(
@@ -482,13 +482,35 @@ export const createMessageSettings = () =>
 			`
 {
 	"properties": {
-		"priority": {
-			"type": "string",
-			"nullable": false,
-			"enum": ["low", "medium", "high"]
+		"tinyfat": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"schema": { "type": "integer" },
+				"kind": { "type": "string" },
+				"eventId": { "type": "string" },
+				"customerChannelId": { "type": "string" },
+				"sequence": { "type": "integer" },
+				"source": { "type": "string" },
+				"actorKind": { "type": "string" },
+				"actorId": { "type": "string" },
+				"visibility": { "type": "string" },
+				"deliveryStatus": { "type": "string" }
+			},
+			"required": [
+				"schema",
+				"kind",
+				"eventId",
+				"customerChannelId",
+				"sequence",
+				"source",
+				"actorKind",
+				"actorId",
+				"visibility"
+			]
 		}
 	},
-	"required": ["priority"]
+	"required": ["tinyfat"]
 }
 		`,
 			{
